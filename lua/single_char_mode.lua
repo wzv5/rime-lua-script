@@ -2,6 +2,7 @@
 功能：
 * 按 0 切换单字模式
 * 选字或退出输入状态后自动关闭单字模式
+* 处于单字模式时，按 退格键 关闭单字模式
 
 https://github.com/wzv5/rime-lua-script
 
@@ -49,9 +50,16 @@ local function processor(key, env)
   if engine.schema.page_size > 9 then
     return 2
   end
+  if not context:is_composing() then
+    return 2
+  end
   -- 按 0 切换单字模式
-  if key:repr() == "0" and context:is_composing() then
+  if key:repr() == "0" then
     context:set_option(SINGLE_CHAR_MODE, not context:get_option(SINGLE_CHAR_MODE))
+    return 1
+  -- 处于单字模式时，按 退格键 关闭单字模式
+  elseif key:repr() == "BackSpace" and context:get_option(SINGLE_CHAR_MODE) then
+    context:set_option(SINGLE_CHAR_MODE, false)
     return 1
   end
   return 2
