@@ -57,7 +57,7 @@ patch:
 1. 下载 [cloud_pinyin_mspy.lua](./lua/cloud_pinyin_mspy.lua) 和 [json.lua](https://github.com/rxi/json.lua/blob/master/json.lua) 并将其放入 `<Rime 用户文件夹>/lua/` 文件夹中。
 2. 从 <https://github.com/hchunhui/librime-cloud/releases> 下载 `simplehttp.dll`，并将其放入 `<Rime 安装文件夹>` 中，如 `C:\Program Files\Rime\weasel-0.16.3`。
 3. 依赖 2024.05.19 之后的 librime-lua 插件，但 weasel 0.16.3 早于此版本，可从 <https://github.com/hchunhui/librime-lua/actions> 下载最新的 `rime.dll`，并替换到 Rime 安装文件夹中。如果无法替换，先结束掉 `WeaselServer.exe` 进程再重试。
-4. 修改所用方案的 `xxx.schema.yaml` 配置文件，在其中添加以下内容：
+4. 修改所用方案的 `xxx.custom.yaml` 配置文件，在其中添加以下内容：
 
 ```yaml
 patch:
