@@ -81,6 +81,8 @@ end
 function translator.fini(env)
   env.notifier:disconnect()
   env.memory:disconnect()
+  env.memory = nil
+  collectgarbage()
 end
 
 ---@param input string
