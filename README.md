@@ -63,8 +63,8 @@ patch:
 patch:
   engine/processors/+:
     - lua_processor@*cloud_pinyin_mspy*processor
-  engine/filters/+:
-    - lua_filter@*cloud_pinyin_mspy*filter
+  engine/translators/+:
+    - lua_translator@*cloud_pinyin_mspy*translator
 ```
 
 5. 重新部署后即可生效。

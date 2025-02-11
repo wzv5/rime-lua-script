@@ -7,15 +7,15 @@
 https://github.com/wzv5/rime-lua-script
 
 依赖：
-* 2024.05.19 之后的 librime-lua 插件，但 weasel 0.16.3 早于此版本，可从 https://github.com/hchunhui/librime-lua/actions 下载最新 rime.dll 替换。
+* 2024.05.19 之后的 librime-lua 插件，但 weasel 0.16.3 早于此版本，可从 https://github.com/rime/weasel/releases/tag/latest 下载最新的 weasel 每夜版。
 * simplehttp.dll 和 json.lua，可从 https://github.com/hchunhui/librime-cloud 下载。
 
 用法：
 patch:
   engine/processors/+:
     - lua_processor@*cloud_pinyin_mspy*processor
-  engine/filters/+:
-    - lua_filter@*cloud_pinyin_mspy*filter
+  engine/translators/+:
+    - lua_translator@*cloud_pinyin_mspy*translator
 
 参考：https://github.com/hchunhui/librime-cloud/issues/14#issuecomment-2222450807
 ]]
