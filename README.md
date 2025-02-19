@@ -1,3 +1,9 @@
+## 目录
+
+* [单字模式](#单字模式)
+* [云输入](#云输入)
+* [剪切板](#剪切板)
+
 ## 单字模式
 
 ![单字模式](./img/单字模式.gif)
@@ -9,7 +15,6 @@
 ### 安装方法
 
 1. 下载 [single_char_mode.lua](./lua/single_char_mode.lua)，并将其放入 `<Rime 用户文件夹>/lua/` 文件夹中。
-
 2. 修改所用方案的 `xxx.schema.yaml` 配置文件，找到 `engine` 字段，在其中添加以下内容：
 
 ```yaml
@@ -72,3 +77,26 @@ patch:
 ### 感谢
 
 * https://github.com/hchunhui/librime-cloud/issues/14#issuecomment-2222450807
+
+---
+
+## 剪切板
+
+* 在后台自动记录剪切板历史，保存最近 5 次的内容
+* 输入设置的关键字之后显示剪切板历史，一键输入
+
+### 安装方法
+
+1. 下载 [lua_helper_wzv5.dll](./bin/windows-x64/lua_helper_wzv5.dll)，并将其放入 `<Rime 安装文件夹>` 中，如 `C:\Program Files\Rime\weasel-0.16.3`。
+2. 下载 [clipboard_translator.lua](./lua/clipboard_translator.lua) 并将其放入 `<Rime 用户文件夹>/lua/` 文件夹中。
+3. 修改所用方案的 `xxx.custom.yaml` 配置文件，在其中添加以下内容：
+
+```yaml
+patch:
+  # 需要插入到尽可能靠前的位置，避免被其他组件降低权重
+  engine/translators/@before 0: lua_translator@*clipboard_translator
+  # 可选：设置触发关键字
+  # clipboard_translator/keyword: jqb
+```
+
+4. 重新部署后即可生效。
