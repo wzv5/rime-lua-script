@@ -87,13 +87,21 @@ function filter.fini(env)
   env.notifier2:disconnect()
 end
 
+
+local function is_emoji(s)
+  -- 简单过滤掉 0x1f000 到 0x1faff 范围，不严格，但够用
+  local cp = utf8.codepoint(s)
+  return cp >= 0x1f000 and cp <= 0x1faff
+end
+
 ---@param input Translation
 ---@param env Env
 function filter.func(input, env)
   local context = env.engine.context
   local on = context:get_option(SINGLE_CHAR_MODE)
   for cand in input:iter() do
-    if not on or utf8.len(cand.text) == 1 then
+    -- emoji 不作为单字，避免干扰
+    if not on or (utf8.len(cand.text) == 1 and not is_emoji(cand.text)) then
       yield(cand)
     end
   end
