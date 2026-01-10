@@ -1,14 +1,15 @@
 --[[
 功能：
-* 微软双拼，按 Ctrl+Shift+C 调用百度云输入
-* 选词上屏后自动加入词库，下次就可直接输入
-* 如果云结果的拼音与原始输入不一致，会在备注内显示实际拼音
+* 微软双拼，按 Ctrl+Shift+C 调用指定搜索引擎的建议词列表
+* 选词上屏后，如果输入拼音与反查结果一致，就加入词库，下次就可直接输入
+* 通过 rust 实现同时并发请求多个搜索引擎，并整合所有结果
+* 支持的搜索引擎：baidu、bilibili、bing、taobao
 
 https://github.com/wzv5/rime-lua-script
 
 依赖：
-* 2024.05.19 之后的 librime-lua 插件，但 weasel 0.16.3 早于此版本，可从 https://github.com/rime/weasel/releases/tag/latest 下载最新的 weasel 每夜版。
-* simplehttp.dll 和 json.lua，可从 https://github.com/hchunhui/librime-cloud 下载。
+https://github.com/wzv5/rime-lua-script/blob/main/bin/windows-x64/lua_helper_wzv5.dll
+下载后放入 weasel 安装目录中，如 C:\Program Files\Rime\weasel-0.17.4。
 
 用法：
 patch:
@@ -16,13 +17,18 @@ patch:
     - lua_processor@*cloud_pinyin_mspy*processor
   engine/translators/+:
     - lua_translator@*cloud_pinyin_mspy*translator
+  cloud_pinyin:
+    # 可选，设置反查词库，如果不指定，则不反查，也不会自动加入词库
+    reverse_db: rime_frost
+    # 可选，设置想要使用的搜索引擎，默认为 baidu
+    providers:
+      - baidu
+      - bilibili
 
 参考：https://github.com/hchunhui/librime-cloud/issues/14#issuecomment-2222450807
 ]]
 
-local json = require("json")
-local http = require("simplehttp")
-http.TIMEOUT = 1
+local helper = require("lua_helper_wzv5")
 
 local flag = false
 
@@ -37,13 +43,7 @@ local function mspy_2_qp(input)
     end
     table.insert(result_table, mspy2qp_table[pair] or pair)
   end
-  return table.concat(result_table, "")
-end
-
-local function make_url(input, bg, ed)
-  return 'https://olime.baidu.com/py?input=' .. input ..
-      '&inputtype=py&bg=' .. bg .. '&ed=' .. ed ..
-      '&result=hanzi&resultcoding=utf-8&ch_en=0&clientinfo=web&version=1'
+  return result_table
 end
 
 local function processor(key, env)
@@ -60,19 +60,60 @@ local translator = {}
 
 ---@param env Env
 function translator.init(env)
+  local config = env.engine.schema.config
+  local db_name = config:get_string("cloud_pinyin/reverse_db")
+  if db_name then
+    env.db = ReverseLookup(db_name)
+  end
+  local list = config:get_list("cloud_pinyin/providers")
+  local providers = {}
+  if list and list.size > 0 then
+    for i = 0, list.size - 1 do
+      table.insert(providers, list:get_value_at(i).value)
+    end
+  end
+  env.providers = providers or {"baidu"}
   env.memory = Memory(env.engine, env.engine.schema)
   env.notifier = env.engine.context.commit_notifier:connect(function(ctx)
     local commit = ctx.commit_history:back()
     if commit then
       if commit.type:sub(1, 6) == "cloud:" then
         local code = commit.type:sub(7)
+        local text = commit.text
+        -- 反差，按字查拼音，只有查询结果与输入拼音完全匹配时才加入词库
+        if not env.db then
+          return
+        end
+        local code_input = {}
+        local code_db = {}
+        for s in string.gmatch(code, "[^ ]+") do
+          table.insert(code_input, s)
+        end
+        for _, c in utf8.codes(text) do
+          table.insert(code_db, env.db:lookup(utf8.char(c)))
+        end
+        if #code_input ~= #code_db then
+          return
+        end
+        for i, c in ipairs(code_input) do
+          local found = false
+          for s in string.gmatch(code_db[i], "[^ ]+") do
+            if s == c then
+              found = true
+              break
+            end
+          end
+          if not found then
+            return
+          end
+        end
         local entry = DictEntry()
-        entry.text = commit.text
+        entry.text = text
         entry.custom_code = code .. " "
         env.memory:start_session()
         local r = env.memory:update_userdict(entry, 1, "")
         env.memory:finish_session()
-        --log.error(string.format("添加用户词典：%s, %s, %q", code, commit.text, r))
+        --log.error(string.format("添加用户词典：%s, %s, %q", code, text, r))
       end
     end
   end)
@@ -82,6 +123,7 @@ function translator.fini(env)
   env.notifier:disconnect()
   env.memory:disconnect()
   env.memory = nil
+  env.db = nil
   collectgarbage()
 end
 
@@ -94,23 +136,15 @@ function translator.func(input, seg, env)
   end
   flag = false
   local qp = mspy_2_qp(input)
-  local reply = http.request(make_url(qp, 0, 5))
-  local _, j = pcall(json.decode, reply)
-  if j.status == "T" and j.result and j.result[1] then
-    for i, v in ipairs(j.result[1]) do
-      local code = string.gsub(v[3].pinyin, "'", " ")
-      local comment = "☁️"
-      local qp_eq = string.gsub(v[3].pinyin, "'", "") == qp
-      if not qp_eq then
-        comment = string.format("(%s)%s", code, comment)
-      end
-      local c = Candidate("cloud:" .. code, seg.start, seg._end, v[1], comment)
-      c.quality = 2
-      if qp_eq then
-        c.preedit = code
-      end
-      yield(c)
-    end
+  local code = table.concat(qp, " ")
+  local reply = helper.suggest.suggest(qp, env.providers)
+  -- 按字符串长度排序，短的在前，一般短的为最佳结果
+  table.sort(reply, function(a, b) return utf8.len(a) < utf8.len(b) end)
+  for _, value in ipairs(reply) do
+    local c = Candidate("cloud:" .. code, seg.start, seg._end, value, "☁️")
+    c.quality = 2
+    c.preedit = code
+    yield(c)
   end
 end
 

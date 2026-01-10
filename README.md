@@ -53,16 +53,16 @@ patch:
 
 ![云输入](./img/云输入.gif)
 
-* 微软双拼，按 Ctrl+Shift+C 调用百度云输入
-* 选词上屏后自动加入词库，下次就可直接输入
-* 如果云结果的拼音与原始输入不一致，会在备注内显示实际拼音
+* 微软双拼，按 Ctrl+Shift+C 调用指定搜索引擎的建议词列表
+* 选词上屏后，如果输入拼音与反查结果一致，就加入词库，下次就可直接输入
+* 通过 rust 实现同时并发请求多个搜索引擎，并整合所有结果
+* 支持的搜索引擎：baidu、bilibili、bing、taobao
 
 ### 安装方法
 
-1. 下载 [cloud_pinyin_mspy.lua](./lua/cloud_pinyin_mspy.lua) 和 [json.lua](https://github.com/rxi/json.lua/blob/master/json.lua) 并将其放入 `<Rime 用户文件夹>/lua/` 文件夹中。
-2. 从 <https://github.com/hchunhui/librime-cloud/releases> 下载 `simplehttp.dll`，并将其放入 `<Rime 安装文件夹>` 中，如 `C:\Program Files\Rime\weasel-0.16.3`。
-3. 依赖 2024.05.19 之后的 librime-lua 插件，但 weasel 0.16.3 早于此版本，可从 <https://github.com/rime/weasel/releases/tag/latest> 下载最新的 weasel 每夜版。
-4. 修改所用方案的 `xxx.custom.yaml` 配置文件，在其中添加以下内容：
+1. 下载 [cloud_pinyin_mspy.lua](./lua/cloud_pinyin_mspy.lua) 并将其放入 `<Rime 用户文件夹>/lua/` 文件夹中。
+2. 下载 [lua_helper_wzv5.dll](./bin/windows-x64/lua_helper_wzv5.dll)，并将其放入 `<Rime 安装文件夹>` 中，如 `C:\Program Files\Rime\weasel-0.17.4`。
+3. 修改所用方案的 `xxx.custom.yaml` 配置文件，在其中添加以下内容：
 
 ```yaml
 patch:
@@ -70,9 +70,17 @@ patch:
     - lua_processor@*cloud_pinyin_mspy*processor
   engine/translators/+:
     - lua_translator@*cloud_pinyin_mspy*translator
+  cloud_pinyin:
+    # 可选，设置反查词库，如果不指定，则不反查，也不会自动加入词库
+    reverse_db: rime_frost
+    # 可选，设置想要使用的搜索引擎，默认为 baidu
+    # 支持的搜索引擎：baidu、bilibili、bing、taobao
+    providers:
+      - baidu
+      - bilibili
 ```
 
-5. 重新部署后即可生效。
+4. 重新部署后即可生效。
 
 ### 感谢
 
