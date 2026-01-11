@@ -1,6 +1,10 @@
+#![allow(unused)]
+
 use mlua::prelude::*;
+
 mod clipboard;
 mod error;
+mod rime;
 mod suggest;
 
 fn init_clipboard(_: &Lua, _: ()) -> LuaResult<()> {
@@ -17,8 +21,29 @@ fn get_clipboard(_: &Lua, _: ()) -> LuaResult<Vec<String>> {
     Ok(clipboard::get())
 }
 
-fn suggest(_: &Lua, (pinyin, providers): (Vec<String>, Vec<String>)) -> LuaResult<Vec<String>> {
+fn suggest(lua: &Lua, (pinyin, providers): (Vec<String>, Vec<String>)) -> LuaResult<Vec<String>> {
+    //rime::Rime::new(lua).log().error(&format!("{pinyin:?}"));
     Ok(suggest::suggest(pinyin, providers))
+}
+
+fn pinyin_match(
+    _: &Lua,
+    (text, pinyin, lookup_fn): (String, String, LuaFunction),
+) -> LuaResult<bool> {
+    let lookup = |c: char| lookup_fn.call::<String>(c).unwrap();
+    let text = text.chars().collect::<Vec<_>>();
+    let pinyin = pinyin.split(" ").collect::<Vec<_>>();
+    if text.len() != pinyin.len() {
+        return Ok(false);
+    }
+    let mut chars = text.into_iter();
+    for py in pinyin {
+        let c = chars.next().unwrap();
+        if lookup(c).split(" ").any(|i| i == py) == false {
+            return Ok(false);
+        }
+    }
+    return Ok(true);
 }
 
 #[mlua::lua_module]
@@ -29,9 +54,8 @@ fn lua_helper_wzv5(lua: &Lua) -> LuaResult<LuaTable> {
     clipboard_table.set("fini", lua.create_function(fini_clipboard)?)?;
     clipboard_table.set("get", lua.create_function(get_clipboard)?)?;
     exports.set("clipboard", clipboard_table)?;
-    let suggest_table = lua.create_table()?;
-    suggest_table.set("suggest", lua.create_function(suggest)?)?;
-    exports.set("suggest", suggest_table)?;
+    exports.set("suggest", lua.create_function(suggest)?)?;
+    exports.set("pinyin_match", lua.create_function(pinyin_match)?)?;
     Ok(exports)
 }
 

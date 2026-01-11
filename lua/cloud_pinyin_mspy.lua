@@ -80,32 +80,12 @@ function translator.init(env)
       if commit.type:sub(1, 6) == "cloud:" then
         local code = commit.type:sub(7)
         local text = commit.text
-        -- 反差，按字查拼音，只有查询结果与输入拼音完全匹配时才加入词库
+        -- 反查，按字查拼音，只有查询结果与输入拼音完全匹配时才加入词库
         if not env.db then
           return
         end
-        local code_input = {}
-        local code_db = {}
-        for s in string.gmatch(code, "[^ ]+") do
-          table.insert(code_input, s)
-        end
-        for _, c in utf8.codes(text) do
-          table.insert(code_db, env.db:lookup(utf8.char(c)))
-        end
-        if #code_input ~= #code_db then
+        if not helper.pinyin_match(text, code, function(c) return env.db:lookup(c) end) then
           return
-        end
-        for i, c in ipairs(code_input) do
-          local found = false
-          for s in string.gmatch(code_db[i], "[^ ]+") do
-            if s == c then
-              found = true
-              break
-            end
-          end
-          if not found then
-            return
-          end
         end
         local entry = DictEntry()
         entry.text = text
@@ -137,7 +117,7 @@ function translator.func(input, seg, env)
   flag = false
   local qp = mspy_2_qp(input)
   local code = table.concat(qp, " ")
-  local reply = helper.suggest.suggest(qp, env.providers)
+  local reply = helper.suggest(qp, env.providers)
   -- 按字符串长度排序，短的在前，一般短的为最佳结果
   table.sort(reply, function(a, b) return utf8.len(a) < utf8.len(b) end)
   for _, value in ipairs(reply) do
