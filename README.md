@@ -78,6 +78,8 @@ patch:
     providers:
       - baidu
       - bilibili
+    # 可选，对结果进行额外处理，可用值：none（仅去重）、sort_by_length（按长度排序）、truncate（默认，截断为输入的长度）
+    post_processing: truncate
 ```
 
 4. 重新部署后即可生效。

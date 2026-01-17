@@ -1,9 +1,15 @@
-#![allow(unused)]
+#![allow(unused_variables, dead_code)]
+
+use std::sync::{Arc, LazyLock, RwLock};
 
 use mlua::prelude::*;
 
+#[macro_use]
+extern crate log;
+
 mod clipboard;
 mod error;
+mod logger;
 mod rime;
 mod suggest;
 
@@ -21,9 +27,8 @@ fn get_clipboard(_: &Lua, _: ()) -> LuaResult<Vec<String>> {
     Ok(clipboard::get())
 }
 
-fn suggest(lua: &Lua, (pinyin, providers): (Vec<String>, Vec<String>)) -> LuaResult<Vec<String>> {
-    //rime::Rime::new(lua).log().error(&format!("{pinyin:?}"));
-    Ok(suggest::suggest(pinyin, providers))
+fn new_suggest(_: &Lua, _: ()) -> LuaResult<suggest::Suggest> {
+    suggest::Suggest::new()
 }
 
 fn pinyin_match(
@@ -46,15 +51,47 @@ fn pinyin_match(
     return Ok(true);
 }
 
+struct Global {
+    lua: WeakLua,
+    rime: rime::RimeGlobal,
+}
+
+// 绕过 rust 的全局变量限制，其实是 mlua 的限制，但 mlua 不允许 module 开启 send 特性，
+// 正常情况下 rime 不会出现多线程并发调用，所以姑且认为安全
+unsafe impl Sync for Global {}
+unsafe impl Send for Global {}
+
+static GLOBAL: LazyLock<Arc<RwLock<Option<Global>>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(None)));
+
+// 绑定到当前 lua 模块上，用来接收 drop 回调，从而精准控制生命周期
+struct DropNotifier;
+
+impl Drop for DropNotifier {
+    fn drop(&mut self) {
+        *GLOBAL.write().unwrap() = None;
+    }
+}
+
+impl LuaUserData for DropNotifier {}
+
 #[mlua::lua_module]
 fn lua_helper_wzv5(lua: &Lua) -> LuaResult<LuaTable> {
+    *GLOBAL.write().unwrap() = Some(Global {
+        lua: lua.weak(),
+        rime: rime::RimeGlobal::new(lua).unwrap(),
+    });
+    logger::init();
     let exports = lua.create_table()?;
+    exports.set("_drop_notifier", DropNotifier)?;
     let clipboard_table = lua.create_table()?;
     clipboard_table.set("init", lua.create_function(init_clipboard)?)?;
     clipboard_table.set("fini", lua.create_function(fini_clipboard)?)?;
     clipboard_table.set("get", lua.create_function(get_clipboard)?)?;
     exports.set("clipboard", clipboard_table)?;
-    exports.set("suggest", lua.create_function(suggest)?)?;
+    let suggest_table = lua.create_table()?;
+    suggest_table.set("new", lua.create_function(new_suggest)?)?;
+    exports.set("suggest", suggest_table)?;
     exports.set("pinyin_match", lua.create_function(pinyin_match)?)?;
     Ok(exports)
 }

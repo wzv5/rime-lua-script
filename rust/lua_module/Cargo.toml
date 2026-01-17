@@ -11,5 +11,7 @@ name = "lua_helper_wzv5"
 mlua = { version = "0.11.5", features = ["lua54", "module"] }
 clipboard-rs = "0.3.1"
 tokio = { version = "1.49.0", features = ["rt"] }
-reqwest = { version = "0.13.1", features = ["gzip", "brotli", "zstd", "deflate", "query", "json"] }
+# 启用 hickory-dns 可最大化利用异步特性，默认的 dns 解析方式需要额外的后台阻塞线程
+reqwest = { version = "0.13.1", features = ["gzip", "brotli", "zstd", "deflate", "query", "json", "hickory-dns"] }
 serde = {version = "1.0.228", features = ["derive"] }
+log = "0.4.29"

@@ -24,6 +24,8 @@ patch:
     providers:
       - baidu
       - bilibili
+    # 可选，对结果进行额外处理，可用值：none（仅去重）、sort_by_length（按长度排序）、truncate（默认，截断为输入的长度）
+    post_processing: truncate
 
 参考：https://github.com/hchunhui/librime-cloud/issues/14#issuecomment-2222450807
 ]]
@@ -72,29 +74,30 @@ function translator.init(env)
       table.insert(providers, list:get_value_at(i).value)
     end
   end
-  env.providers = providers or {"baidu"}
+  local post_processing = config:get_string("cloud_pinyin/post_processing")
+  env.suggest = helper.suggest.new()
+  env.suggest.providers = providers or {"baidu"}
+  env.suggest.post_processing = post_processing or "truncate"
   env.memory = Memory(env.engine, env.engine.schema)
   env.notifier = env.engine.context.commit_notifier:connect(function(ctx)
     local commit = ctx.commit_history:back()
-    if commit then
-      if commit.type:sub(1, 6) == "cloud:" then
-        local code = commit.type:sub(7)
-        local text = commit.text
-        -- 反查，按字查拼音，只有查询结果与输入拼音完全匹配时才加入词库
-        if not env.db then
-          return
-        end
-        if not helper.pinyin_match(text, code, function(c) return env.db:lookup(c) end) then
-          return
-        end
-        local entry = DictEntry()
-        entry.text = text
-        entry.custom_code = code .. " "
-        env.memory:start_session()
-        local r = env.memory:update_userdict(entry, 1, "")
-        env.memory:finish_session()
-        --log.error(string.format("添加用户词典：%s, %s, %q", code, text, r))
+    if commit and commit.type:sub(1, 6) == "cloud:" then
+      local code = commit.type:sub(7)
+      local text = commit.text
+      -- 反查，按字查拼音，只有查询结果与输入拼音完全匹配时才加入词库
+      if not env.db then
+        return
       end
+      if not helper.pinyin_match(text, code, function(c) return env.db:lookup(c) end) then
+        return
+      end
+      local entry = DictEntry()
+      entry.text = text
+      entry.custom_code = code .. " "
+      env.memory:start_session()
+      local r = env.memory:update_userdict(entry, 1, "")
+      env.memory:finish_session()
+      --log.error(string.format("添加用户词典：%s, %s, %q", code, text, r))
     end
   end)
 end
@@ -104,6 +107,7 @@ function translator.fini(env)
   env.memory:disconnect()
   env.memory = nil
   env.db = nil
+  env.suggest = nil
   collectgarbage()
 end
 
@@ -117,9 +121,7 @@ function translator.func(input, seg, env)
   flag = false
   local qp = mspy_2_qp(input)
   local code = table.concat(qp, " ")
-  local reply = helper.suggest(qp, env.providers)
-  -- 按字符串长度排序，短的在前，一般短的为最佳结果
-  table.sort(reply, function(a, b) return utf8.len(a) < utf8.len(b) end)
+  local reply = env.suggest:call(qp)
   for _, value in ipairs(reply) do
     local c = Candidate("cloud:" .. code, seg.start, seg._end, value, "☁️")
     c.quality = 2

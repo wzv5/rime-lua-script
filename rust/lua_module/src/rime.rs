@@ -1,23 +1,21 @@
-use mlua::{FromLua, Function, Lua, Value};
+use mlua::prelude::*;
 
-pub struct Rime<'a> {
-    lua: &'a Lua,
+pub struct RimeGlobal {
+    pub log: Log,
 }
 
-impl<'a> Rime<'a> {
-    pub fn new(lua: &'a Lua) -> Self {
-        Self { lua }
-    }
-
-    pub fn log(&self) -> Log {
-        self.lua.globals().get("log").unwrap()
+impl RimeGlobal {
+    pub fn new(lua: &Lua) -> LuaResult<Self> {
+        Ok(Self {
+            log: lua.globals().get("log")?,
+        })
     }
 }
 
 pub struct Log {
-    info: Function,
-    warning: Function,
-    error: Function,
+    info: LuaFunction,
+    warning: LuaFunction,
+    error: LuaFunction,
 }
 
 impl Log {
@@ -35,14 +33,12 @@ impl Log {
 }
 
 impl FromLua for Log {
-    fn from_lua(value: Value, _lua: &Lua) -> mlua::Result<Self> {
-        let log = value
-            .as_table()
-            .ok_or(mlua::Error::RuntimeError("".into()))?;
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        let log = value.as_table().ok_or(LuaError::RuntimeError("".into()))?;
         Ok(Self {
-            info: log.get("info").unwrap(),
-            warning: log.get("warning").unwrap(),
-            error: log.get("error").unwrap(),
+            info: log.get("info")?,
+            warning: log.get("warning")?,
+            error: log.get("error")?,
         })
     }
 }
